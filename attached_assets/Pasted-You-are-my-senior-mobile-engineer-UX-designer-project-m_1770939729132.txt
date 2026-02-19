@@ -1,0 +1,121 @@
+You are my senior mobile engineer + UX designer + project manager. Build a university-grade Minimum Viable Product (MVP) for a “Sleep Ritual Gamification” sleep tracker app that is designed to score in the top band (86–100). 
+
+GOAL
+Create a cross-platform mobile app (Flutter preferred) that helps users build a consistent sleep routine through tracking + reminders + gamification. The MVP must be fully runnable, include a clear requirements/design rationale, and include a risk + security plan.
+
+TECH STACK (MANDATORY)
+- Flutter (latest stable)
+- Local storage: Hive OR SQLite (choose one, justify choice briefly)
+- Charts: fl_chart (or similar Flutter chart library)
+- Notifications: flutter_local_notifications
+- Permissions: permission_handler
+- State management: Riverpod OR Provider (choose one, justify briefly)
+- Architecture: clean-ish separation (data / domain / presentation)
+
+MVP FEATURES (MUST IMPLEMENT)
+1) Onboarding:
+   - Ask for preferred bedtime and wake time
+   - Ask for reminder window (e.g., 30–90 minutes before bedtime)
+   - Explain permissions clearly (notifications, optional microphone/motion) with a friendly “why we ask” screen
+
+2) Manual Sleep Logging:
+   - “Start Sleep” button to record bedtime timestamp
+   - “End Sleep” button to record wake timestamp
+   - Morning check-in rating (1–5) + optional note (“caffeine, stress, exercise” toggles)
+   - Auto-calc sleep duration
+
+3) Routine Consistency Score:
+   - For each night, compute a consistency score vs target bedtime/wake time
+   - Show a weekly score trend (chart)
+   - Show a simple explanation in-app (“Consistency = how close you are to your usual schedule”)
+
+4) Gamification:
+   - Streak system (consecutive nights logged)
+   - XP points for logging + for hitting schedule targets
+   - Levels (e.g., Level 1–10)
+   - Badges (at least 6) e.g., “3-night streak”, “7-night streak”, “On-time sleeper”, “Weekend consistency”, “Early wind-down”, “5 mood check-ins”
+   - A “Sleep Companion” character that visually “levels up” (simple images or SVG placeholders are fine)
+
+5) Bedtime Routine Support:
+   - Wind-down reminder notification triggered before target bedtime
+   - Optional “Night Ritual Checklist” (3–5 items) users can tick (e.g., “Put phone away”, “Brush teeth”, “Drink water”, “Read 10 minutes”)
+   - Reward XP for completing checklist
+
+6) Analytics Dashboard:
+   - Weekly graph: sleep duration
+   - Weekly graph: consistency score
+   - Summary tiles: avg duration, best night, streak, mood average
+   - Export: basic CSV export of sleep logs (local file)
+
+7) Data & Privacy:
+   - Store all data locally
+   - Include an in-app “Privacy & Data” screen that explains what is collected and why
+   - Do NOT upload anything to the cloud
+   - Add a “Delete all data” button with confirmation
+
+8) Optional Advanced Tracking (IMPLEMENT AT LEAST ONE):
+   Choose ONE:
+   A) Motion proxy: use accelerometer to record movement count during sleep session (lightweight sampling, battery-safe)
+   OR
+   B) Sound proxy: record average noise level without storing audio (privacy-first)
+   - Must include permission handling and an explanation screen
+   - Must include a toggle to enable/disable advanced tracking
+
+NON-FUNCTIONAL REQUIREMENTS (MUST MEET)
+- App must run without crashes
+- Clear error handling (no silent failures)
+- Battery-safe approach for any sensor usage
+- Accessible UI: readable text sizes, good contrast, simple navigation
+- Offline-first by default
+- Code must include comments explaining key functions
+
+DELIVERABLES (MUST OUTPUT)
+A) A complete Flutter project structure with all essential files:
+   - pubspec.yaml dependencies
+   - lib/ folder with clear structure
+   - data models (SleepLog, RitualChecklist, Badge, UserSettings)
+   - services (storage, notifications, permissions, optional sensor)
+   - UI screens (onboarding, home, log sleep, dashboard, badges/character, settings/privacy)
+   - routing and state management setup
+
+B) A short “Requirements & Design” document in markdown inside the repo:
+   - User personas (at least 2)
+   - Functional requirements list (mapped to features above)
+   - Non-functional requirements list
+   - Justification referencing: circadian rhythm + habit loop (cue/routine/reward) + gamification (points/streaks/badges)
+   - A simple data model diagram (ASCII is fine)
+
+C) A “Risk & Security Plan” markdown:
+   - Top risks: privacy, permissions misuse, data loss, battery drain
+   - Mitigations for each risk
+   - GDPR-style principles: data minimisation, transparency, deletion
+   - Threat model lite: what could go wrong and how you reduce it
+
+D) A “Demo Script” markdown for a 10–12 minute showcase video:
+   - Requirements -> design -> build -> features tour -> future work
+   - Include where each team member would speak (use placeholders)
+
+E) A “Future Enhancements” list:
+   - Wearable integration (Apple Watch/Fitbit)
+   - Smart alarm window
+   - Cloud sync (optional, not in MVP)
+   - ML personalised insights (sleep recommendation)
+
+HOW TO OUTPUT (VERY IMPORTANT)
+1) Start by printing:
+   - Folder tree
+   - Dependencies list
+2) Then output the code files one by one with headings like:
+   === FILE: lib/main.dart ===
+   (code)
+3) Provide setup/run instructions for Mac/Windows:
+   flutter pub get
+   flutter run
+4) Keep the app design minimal, modern, and consistent (no clutter).
+5) Be strict: do not invent features outside the list; implement the list fully first.
+6) If any permission/sensor is complex, choose the simplest correct implementation and explain tradeoffs.
+
+QUALITY BAR
+This must feel like a professional MVP ready for assessment: clean UI, correct calculations, and well-structured code. I should be able to copy into a Flutter project and run it.
+
+Now produce everything.
