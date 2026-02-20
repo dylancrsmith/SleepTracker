@@ -22,7 +22,7 @@ router.post(
   "/register",
   validate({ body: registerBodySchema }),
   asyncHandler(async (req, res) => {
-    const { username, password } = req.body;
+    const { username, password, fullName, email, age, weight, gender, activityLevel } = req.body;
 
     // Check if username is already taken
     const existing = await db
@@ -35,13 +35,33 @@ router.post(
       throw Conflict("Username is already taken");
     }
 
+    // Check if email is already registered
+    const existingEmail = await db
+      .select()
+      .from(users)
+      .where(eq(users.email, email))
+      .limit(1);
+
+    if (existingEmail.length > 0) {
+      throw Conflict("An account with this email already exists");
+    }
+
     // Hash password before storing
     const hashedPassword = await bcrypt.hash(password, SALT_ROUNDS);
 
     // Insert new user
     const [newUser] = await db
       .insert(users)
-      .values({ username, password: hashedPassword })
+      .values({
+        username,
+        password: hashedPassword,
+        fullName,
+        email,
+        age,
+        weight: weight ?? null,
+        gender: gender ?? null,
+        activityLevel: activityLevel ?? null,
+      })
       .returning();
 
     // Generate JWT token
@@ -54,7 +74,13 @@ router.post(
     res.status(201).json({
       message: "Account created successfully",
       token,
-      user: { id: newUser.id, username: newUser.username },
+      user: {
+        id: newUser.id,
+        username: newUser.username,
+        fullName: newUser.fullName,
+        email: newUser.email,
+        age: newUser.age,
+      },
     });
   })
 );
@@ -97,7 +123,13 @@ router.post(
     res.json({
       message: "Logged in successfully",
       token,
-      user: { id: user.id, username: user.username },
+      user: {
+        id: user.id,
+        username: user.username,
+        fullName: user.fullName,
+        email: user.email,
+        age: user.age,
+      },
     });
   })
 );
@@ -125,7 +157,13 @@ router.get(
       };
 
       const [user] = await db
-        .select({ id: users.id, username: users.username })
+        .select({
+          id: users.id,
+          username: users.username,
+          fullName: users.fullName,
+          email: users.email,
+          age: users.age,
+        })
         .from(users)
         .where(eq(users.id, payload.userId))
         .limit(1);

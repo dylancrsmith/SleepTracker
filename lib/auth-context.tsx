@@ -5,14 +5,31 @@ import { authApi } from "./api";
 const TOKEN_KEY = "auth_token";
 const USER_KEY = "auth_user";
 
-type User = { id: string; username: string };
+type User = {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  age: number;
+};
+
+type RegisterParams = {
+  username: string;
+  password: string;
+  fullName: string;
+  email: string;
+  age: number;
+  weight?: number;
+  gender?: string;
+  activityLevel?: string;
+};
 
 type AuthContextValue = {
   user: User | null;
   token: string | null;
   isLoading: boolean;
   login: (username: string, password: string) => Promise<void>;
-  register: (username: string, password: string) => Promise<void>;
+  register: (params: RegisterParams) => Promise<void>;
   logout: () => Promise<void>;
 };
 
@@ -58,8 +75,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await saveAuth(res.token, res.user);
   }, []);
 
-  const register = useCallback(async (username: string, password: string) => {
-    const res = await authApi.register(username, password);
+  const register = useCallback(async (params: RegisterParams) => {
+    const res = await authApi.register(params);
     await saveAuth(res.token, res.user);
   }, []);
 

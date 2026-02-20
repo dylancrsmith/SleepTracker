@@ -10,6 +10,9 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useAuth } from "@/lib/auth-context";
 
+const GENDERS = ["male", "female", "non-binary", "prefer not to say"] as const;
+const ACTIVITY_LEVELS = ["sedentary", "lightly active", "active", "very active"] as const;
+
 export default function LoginScreen() {
   const insets = useSafeAreaInsets();
   const colorScheme = useColorScheme();
@@ -18,9 +21,22 @@ export default function LoginScreen() {
   const { login, register } = useAuth();
 
   const [mode, setMode] = useState<"login" | "signup">("login");
+
+  // Shared fields
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+
+  // Signup mandatory fields
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [age, setAge] = useState("");
+
+  // Signup optional fields
+  const [weight, setWeight] = useState("");
+  const [gender, setGender] = useState<string | null>(null);
+  const [activityLevel, setActivityLevel] = useState<string | null>(null);
+
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,7 +45,6 @@ export default function LoginScreen() {
   const handleSubmit = async () => {
     setError(null);
 
-    // Inline validation
     if (!username.trim() || !password.trim()) {
       setError("Please enter a username and password.");
       return;
@@ -43,12 +58,39 @@ export default function LoginScreen() {
       return;
     }
 
+    if (!isLogin) {
+      if (!fullName.trim() || fullName.trim().length < 2) {
+        setError("Please enter your full name (at least 2 characters).");
+        return;
+      }
+      if (!email.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+        setError("Please enter a valid email address.");
+        return;
+      }
+      const ageNum = parseInt(age, 10);
+      if (!age || isNaN(ageNum) || ageNum < 13 || ageNum > 120) {
+        setError("Please enter a valid age (13–120).");
+        return;
+      }
+    }
+
     setIsLoading(true);
     try {
       if (isLogin) {
         await login(username.trim(), password);
       } else {
-        await register(username.trim(), password);
+        const ageNum = parseInt(age, 10);
+        const weightNum = weight ? parseInt(weight, 10) : undefined;
+        await register({
+          username: username.trim(),
+          password,
+          fullName: fullName.trim(),
+          email: email.trim().toLowerCase(),
+          age: ageNum,
+          weight: weightNum && !isNaN(weightNum) ? weightNum : undefined,
+          gender: gender ?? undefined,
+          activityLevel: activityLevel ?? undefined,
+        });
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       router.replace("/(tabs)");
@@ -63,8 +105,8 @@ export default function LoginScreen() {
   const toggleMode = () => {
     Haptics.selectionAsync();
     setMode(isLogin ? "signup" : "login");
-    setUsername("");
-    setPassword("");
+    setUsername(""); setPassword(""); setFullName(""); setEmail("");
+    setAge(""); setWeight(""); setGender(null); setActivityLevel(null);
     setError(null);
   };
 
@@ -81,7 +123,7 @@ export default function LoginScreen() {
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Logo / Icon */}
+        {/* Logo */}
         <View style={styles.header}>
           <View style={[styles.iconCircle, { backgroundColor: theme.primary + "20" }]}>
             <Ionicons name="moon" size={48} color={theme.moonLavender} />
@@ -101,51 +143,132 @@ export default function LoginScreen() {
           </Text>
 
           {/* Username */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
-              Username
-            </Text>
-            <View style={[styles.inputRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="person-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
-              <TextInput
-                value={username}
-                onChangeText={setUsername}
-                placeholder="e.g. sleepyhead42"
-                placeholderTextColor={theme.textMuted}
-                autoCapitalize="none"
-                autoCorrect={false}
-                style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
-              />
-            </View>
-          </View>
+          <Field label="Username" theme={theme}>
+            <Ionicons name="person-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+            <TextInput
+              value={username}
+              onChangeText={setUsername}
+              placeholder="e.g. sleepyhead42"
+              placeholderTextColor={theme.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+            />
+          </Field>
 
           {/* Password */}
-          <View style={styles.fieldGroup}>
-            <Text style={[styles.label, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
-              Password
-            </Text>
-            <View style={[styles.inputRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
-              <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
-              <TextInput
-                value={password}
-                onChangeText={setPassword}
-                placeholder="Min. 8 characters"
-                placeholderTextColor={theme.textMuted}
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
-              />
-              <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
-                <Ionicons
-                  name={showPassword ? "eye-off-outline" : "eye-outline"}
-                  size={18}
-                  color={theme.textMuted}
-                />
-              </Pressable>
-            </View>
-          </View>
+          <Field label="Password" theme={theme}>
+            <Ionicons name="lock-closed-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="Min. 8 characters"
+              placeholderTextColor={theme.textMuted}
+              secureTextEntry={!showPassword}
+              autoCapitalize="none"
+              style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+            />
+            <Pressable onPress={() => setShowPassword(!showPassword)} style={styles.eyeBtn}>
+              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={18} color={theme.textMuted} />
+            </Pressable>
+          </Field>
 
-          {/* Error message */}
+          {/* ── Signup-only fields ── */}
+          {!isLogin && (
+            <>
+              <SectionLabel label="About you" theme={theme} />
+
+              <Field label="Full Name" theme={theme}>
+                <Ionicons name="id-card-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  value={fullName}
+                  onChangeText={setFullName}
+                  placeholder="e.g. Dylan Smith"
+                  placeholderTextColor={theme.textMuted}
+                  autoCapitalize="words"
+                  style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+                />
+              </Field>
+
+              <Field label="Email" theme={theme}>
+                <Ionicons name="mail-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder="e.g. you@email.com"
+                  placeholderTextColor={theme.textMuted}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoCorrect={false}
+                  style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+                />
+              </Field>
+
+              <Field label="Age" theme={theme}>
+                <Ionicons name="calendar-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  value={age}
+                  onChangeText={setAge}
+                  placeholder="e.g. 21"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="number-pad"
+                  style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+                />
+              </Field>
+
+              <SectionLabel label="Optional — helps personalise your experience" theme={theme} optional />
+
+              <Field label="Weight (kg)" theme={theme}>
+                <Ionicons name="barbell-outline" size={18} color={theme.textMuted} style={styles.inputIcon} />
+                <TextInput
+                  value={weight}
+                  onChangeText={setWeight}
+                  placeholder="e.g. 75"
+                  placeholderTextColor={theme.textMuted}
+                  keyboardType="number-pad"
+                  style={[styles.input, { color: theme.text, fontFamily: "Nunito_400Regular" }]}
+                />
+              </Field>
+
+              {/* Gender chips */}
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.label, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>Gender</Text>
+                <View style={styles.chipGrid}>
+                  {GENDERS.map((g) => (
+                    <Pressable
+                      key={g}
+                      onPress={() => { Haptics.selectionAsync(); setGender(gender === g ? null : g); }}
+                      style={[styles.chip, { borderColor: gender === g ? theme.primary : theme.border, backgroundColor: gender === g ? theme.primary + "15" : "transparent" }]}
+                    >
+                      <Text style={[styles.chipText, { color: gender === g ? theme.primary : theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
+                        {g}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+
+              {/* Activity level chips */}
+              <View style={styles.fieldGroup}>
+                <Text style={[styles.label, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>Activity Level</Text>
+                <View style={styles.chipGrid}>
+                  {ACTIVITY_LEVELS.map((a) => (
+                    <Pressable
+                      key={a}
+                      onPress={() => { Haptics.selectionAsync(); setActivityLevel(activityLevel === a ? null : a); }}
+                      style={[styles.chip, { borderColor: activityLevel === a ? theme.primary : theme.border, backgroundColor: activityLevel === a ? theme.primary + "15" : "transparent" }]}
+                    >
+                      <Text style={[styles.chipText, { color: activityLevel === a ? theme.primary : theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
+                        {a}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            </>
+          )}
+
+          {/* Error */}
           {error && (
             <View style={[styles.errorBox, { backgroundColor: "#ff4444" + "18", borderColor: "#ff4444" + "40" }]}>
               <Ionicons name="alert-circle-outline" size={16} color="#ff4444" />
@@ -153,7 +276,7 @@ export default function LoginScreen() {
             </View>
           )}
 
-          {/* Submit Button */}
+          {/* Submit */}
           <Pressable
             onPress={handleSubmit}
             disabled={isLoading}
@@ -185,13 +308,38 @@ export default function LoginScreen() {
   );
 }
 
+// ── Shared sub-components ────────────────────────────────────────────────────
+
+function Field({ label, theme, children }: { label: string; theme: any; children: React.ReactNode }) {
+  return (
+    <View style={styles.fieldGroup}>
+      <Text style={[styles.label, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>{label}</Text>
+      <View style={[styles.inputRow, { backgroundColor: theme.surface, borderColor: theme.border }]}>
+        {children}
+      </View>
+    </View>
+  );
+}
+
+function SectionLabel({ label, theme, optional }: { label: string; theme: any; optional?: boolean }) {
+  return (
+    <View style={styles.sectionRow}>
+      <View style={[styles.sectionLine, { backgroundColor: theme.border }]} />
+      <Text style={[styles.sectionText, { color: optional ? theme.textMuted : theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
+        {label}
+      </Text>
+      <View style={[styles.sectionLine, { backgroundColor: theme.border }]} />
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   scroll: { paddingHorizontal: 24, flexGrow: 1, justifyContent: "center" },
   header: { alignItems: "center", marginBottom: 32, gap: 12 },
   iconCircle: { width: 88, height: 88, borderRadius: 44, alignItems: "center", justifyContent: "center" },
   appName: { fontSize: 32 },
   tagline: { fontSize: 15, textAlign: "center" },
-  card: { borderRadius: 24, borderWidth: 1, padding: 24, gap: 20, marginBottom: 24 },
+  card: { borderRadius: 24, borderWidth: 1, padding: 24, gap: 16, marginBottom: 24 },
   cardTitle: { fontSize: 22, marginBottom: 4 },
   fieldGroup: { gap: 8 },
   label: { fontSize: 13 },
@@ -209,4 +357,10 @@ const styles = StyleSheet.create({
   toggleLink: { fontSize: 14 },
   errorBox: { flexDirection: "row", alignItems: "center", gap: 8, padding: 12, borderRadius: 12, borderWidth: 1 },
   errorText: { color: "#ff4444", fontSize: 13, flex: 1 },
+  sectionRow: { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 4 },
+  sectionLine: { flex: 1, height: 1 },
+  sectionText: { fontSize: 11 },
+  chipGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: { paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1.5 },
+  chipText: { fontSize: 13 },
 });

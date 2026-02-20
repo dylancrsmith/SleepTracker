@@ -11,11 +11,25 @@ export const users = pgTable("users", {
     .default(sql`gen_random_uuid()`),
   username: text("username").notNull().unique(),
   password: text("password").notNull(),
+  // Mandatory profile fields
+  fullName: text("full_name").notNull().default(""),
+  email: text("email").notNull().default(""),
+  age: integer("age").notNull().default(0),
+  // Optional fields
+  weight: integer("weight"),           // kg, nullable
+  gender: text("gender"),              // nullable
+  activityLevel: text("activity_level"), // nullable
 });
 
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
+  fullName: true,
+  email: true,
+  age: true,
+  weight: true,
+  gender: true,
+  activityLevel: true,
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;

@@ -40,17 +40,36 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
 
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 
+export type AuthUser = {
+  id: string;
+  username: string;
+  fullName: string;
+  email: string;
+  age: number;
+};
+
 export type AuthResponse = {
   message: string;
   token: string;
-  user: { id: string; username: string };
+  user: AuthUser;
+};
+
+export type RegisterParams = {
+  username: string;
+  password: string;
+  fullName: string;
+  email: string;
+  age: number;
+  weight?: number;
+  gender?: string;
+  activityLevel?: string;
 };
 
 export const authApi = {
-  register: (username: string, password: string) =>
+  register: (params: RegisterParams) =>
     request<AuthResponse>("/api/auth/register", {
       method: "POST",
-      body: { username, password },
+      body: params,
     }),
 
   login: (username: string, password: string) =>
@@ -60,7 +79,7 @@ export const authApi = {
     }),
 
   me: (token: string) =>
-    request<{ user: { id: string; username: string } }>("/api/auth/me", { token }),
+    request<{ user: AuthUser }>("/api/auth/me", { token }),
 };
 
 // ─── Sleep Logs ───────────────────────────────────────────────────────────────
