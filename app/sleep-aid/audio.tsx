@@ -1,140 +1,309 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, useColorScheme } from "react-native";
-import { Audio, type AVPlaybackSource } from "expo-av";
+import {
+  ActivityIndicator,
+  Alert,
+  AppState,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import type { AVPlaybackSource } from "expo-av";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
-import Colors from "@/constants/colors";
+import { SleepAidScaffold } from "@/app/sleep-aid/components/SleepAidScaffold";
+import { SleepAidCard } from "@/app/sleep-aid/components/SleepAidCard";
+import { SleepAidFadeIn } from "@/app/sleep-aid/components/SleepAidFadeIn";
+import { sleepAidTheme } from "@/app/sleep-aid/components/sleep-aid-theme";
+import { SleepAidAudioController } from "@/lib/sleep-aid-audio-controller";
 import { getSleepAidState, patchSleepAidState } from "@/lib/sleep-aid-storage";
 
 type SoundOption = {
   id: string;
   name: string;
+  subtitle: string;
   source: AVPlaybackSource;
 };
 
 const SOUND_OPTIONS: SoundOption[] = [
-  { id: "white_noise", name: "White noise", source: require("../../assets/audio/white-noise.wav") },
-  { id: "rain", name: "Rain", source: require("../../assets/audio/rain.wav") },
-  { id: "rainforest", name: "Nature / rainforest", source: require("../../assets/audio/rainforest.wav") },
-  { id: "fan", name: "Fan", source: require("../../assets/audio/fan.wav") },
-  { id: "spa", name: "Soft spa music", source: require("../../assets/audio/spa.wav") },
-  { id: "guided_relax", name: "Guided relaxation", source: require("../../assets/audio/guided-relaxation.wav") },
+  {
+    id: "brown_noise",
+    name: "Brown noise",
+    subtitle: "Deep blanket-like texture",
+    source: require("../../assets/audio/h-beats-silent-drum-urban-effect-402704.mp3"),
+  },
+  {
+    id: "pink_noise",
+    name: "Pink noise",
+    subtitle: "Balanced soft static",
+    source: require("../../assets/audio/parrot1710-calm-piano-melody-219889.mp3"),
+  },
+  {
+    id: "soft_rain",
+    name: "Soft rain",
+    subtitle: "Gentle rain on glass",
+    source: require("../../assets/audio/eryliaa-gentle-rain-on-window-for-sleep-422420.mp3"),
+  },
+  {
+    id: "ocean_waves",
+    name: "Ocean waves",
+    subtitle: "Calming stream flow",
+    source: require("../../assets/audio/universfield-tranquil-stream-387678.mp3"),
+  },
+  {
+    id: "forest_night",
+    name: "Forest night ambience",
+    subtitle: "Frogs and crickets",
+    source: require("../../assets/audio/eryliaa-night-forest-with-frogs-and-crickets-for-sleep-451153.mp3"),
+  },
+  {
+    id: "soft_fan",
+    name: "Soft fan hum",
+    subtitle: "Steady nature murmur",
+    source: require("../../assets/audio/restfuldreamingtunes-sounds-of-nature-the-gentle-murmur-of-the-brook-276298.mp3"),
+  },
 ];
 
-const TIMER_OPTIONS: (15 | 30 | 60)[] = [15, 30, 60];
-const VOLUME_OPTIONS = [0.2, 0.4, 0.6, 0.8, 1];
+const QUICK_TIMER_OPTIONS = [15, 30, 60];
+const VOLUME_LEVELS = Array.from({ length: 11 }, (_, index) => index / 10);
+
+const LEGACY_SOUND_ID_MAP: Record<string, string> = {
+  white_noise: "brown_noise",
+  rain: "soft_rain",
+  rainforest: "forest_night",
+  fan: "soft_fan",
+  spa: "ocean_waves",
+  guided_relax: "pink_noise",
+};
+
+const DURATION_MINUTES_MIN = 1;
+const DURATION_MINUTES_MAX = 180;
+
+function formatSeconds(seconds: number): string {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${minutes}:${remainder.toString().padStart(2, "0")}`;
+}
 
 export default function SleepAidAudioScreen() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
+  const controllerRef = useRef<SleepAidAudioController | null>(null);
+  const appStateRef = useRef(AppState.currentState);
 
-  const soundRef = useRef<Audio.Sound | null>(null);
-  const stopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [selectedSoundId, setSelectedSoundId] = useState<string>("brown_noise");
+  const [durationMinutes, setDurationMinutes] = useState<number>(30);
+  const [volume, setVolume] = useState(0.6);
+  const [safeVolumeCapEnabled, setSafeVolumeCapEnabled] = useState(true);
 
-  const [selectedSoundId, setSelectedSoundId] = useState<string>("white_noise");
-  const [timerMinutes, setTimerMinutes] = useState<15 | 30 | 60>(30);
-  const [volume, setVolume] = useState(0.7);
   const [isPlaying, setIsPlaying] = useState(false);
-  const [error, setError] = useState<string>("");
+  const [isPaused, setIsPaused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [remainingSeconds, setRemainingSeconds] = useState(0);
+  const [error, setError] = useState("");
+
+  const [customModalVisible, setCustomModalVisible] = useState(false);
+  const [customMinutesInput, setCustomMinutesInput] = useState("");
 
   const selectedSound = useMemo(
     () => SOUND_OPTIONS.find((item) => item.id === selectedSoundId) ?? SOUND_OPTIONS[0],
     [selectedSoundId],
   );
 
-  useEffect(() => {
-    getSleepAidState().then((state) => {
-      setSelectedSoundId(state.selectedSoundId);
-      setTimerMinutes(state.soundTimerMinutes);
-      setVolume(state.soundVolume);
-    });
-
-    return () => {
-      if (stopTimerRef.current) clearTimeout(stopTimerRef.current);
-      if (soundRef.current) {
-        soundRef.current.unloadAsync().catch(() => undefined);
-      }
-    };
-  }, []);
+  const maxAllowedVolume = safeVolumeCapEnabled ? 0.8 : 1;
+  const effectiveVolume = Math.min(volume, maxAllowedVolume);
+  const isCustomDuration = !QUICK_TIMER_OPTIONS.includes(durationMinutes);
 
   const saveSettings = async (next: {
     selectedSoundId?: string;
-    soundTimerMinutes?: 15 | 30 | 60;
+    selectedSoundName?: string;
+    soundTimerMinutes?: number;
     soundVolume?: number;
+    safeVolumeCapEnabled?: boolean;
   }) => {
     await patchSleepAidState({
       selectedSoundId: next.selectedSoundId ?? selectedSoundId,
-      soundTimerMinutes: next.soundTimerMinutes ?? timerMinutes,
+      selectedSoundName: next.selectedSoundName ?? selectedSound.name,
+      soundTimerMinutes: next.soundTimerMinutes ?? durationMinutes,
       soundVolume: next.soundVolume ?? volume,
+      safeVolumeCapEnabled: next.safeVolumeCapEnabled ?? safeVolumeCapEnabled,
     });
   };
 
-  const stopPlayback = async () => {
-    if (stopTimerRef.current) {
-      clearTimeout(stopTimerRef.current);
-      stopTimerRef.current = null;
+  const restartPlayback = async (nextSoundId?: string) => {
+    if (!controllerRef.current) return;
+
+    const soundId = nextSoundId ?? selectedSoundId;
+    const sound = SOUND_OPTIONS.find((item) => item.id === soundId) ?? SOUND_OPTIONS[0];
+
+    setError("");
+    setIsLoading(true);
+
+    try {
+      await controllerRef.current.start({
+        source: sound.source,
+        durationSeconds: durationMinutes * 60,
+        targetVolume: effectiveVolume,
+      });
+    } finally {
+      setIsLoading(false);
     }
-    if (soundRef.current) {
-      await soundRef.current.stopAsync().catch(() => undefined);
-      await soundRef.current.unloadAsync().catch(() => undefined);
-      soundRef.current = null;
+  };
+
+  const applyDuration = async (nextMinutes: number) => {
+    setDurationMinutes(nextMinutes);
+    await saveSettings({ soundTimerMinutes: nextMinutes });
+
+    if (controllerRef.current && isPlaying) {
+      // Duration changes while active reset the countdown immediately without reloading audio.
+      await controllerRef.current.setDurationSeconds(nextMinutes * 60);
     }
-    setIsPlaying(false);
+  };
+
+  const openCustomDurationPicker = () => {
+    setCustomMinutesInput(String(durationMinutes));
+    setCustomModalVisible(true);
+  };
+
+  const applyCustomDuration = async () => {
+    const trimmed = customMinutesInput.trim();
+    if (!/^\d+$/.test(trimmed)) {
+      Alert.alert("Invalid duration", "Enter a whole number between 1 and 180.");
+      return;
+    }
+
+    const parsed = Number(trimmed);
+    if (parsed < DURATION_MINUTES_MIN || parsed > DURATION_MINUTES_MAX) {
+      Alert.alert("Invalid duration", "Duration must be between 1 and 180 minutes.");
+      return;
+    }
+
+    await applyDuration(parsed);
+    setCustomModalVisible(false);
+    await Haptics.selectionAsync();
   };
 
   const startPlayback = async () => {
+    if (!controllerRef.current) return;
+
     setError("");
+    setIsLoading(true);
+
     try {
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: false,
-        staysActiveInBackground: false,
-        playsInSilentModeIOS: true,
+      await controllerRef.current.start({
+        source: selectedSound.source,
+        durationSeconds: durationMinutes * 60,
+        targetVolume: effectiveVolume,
       });
-
-      await stopPlayback();
-
-      const { sound } = await Audio.Sound.createAsync(
-        selectedSound.source,
-        {
-          shouldPlay: true,
-          isLooping: true,
-          volume,
-        },
-      );
-
-      soundRef.current = sound;
-      setIsPlaying(true);
-
-      // Stop playback after the selected timer window.
-      stopTimerRef.current = setTimeout(() => {
-        stopPlayback().catch(() => undefined);
-      }, timerMinutes * 60 * 1000);
-    } catch (e) {
-      setError("Audio failed to start. Check bundled assets and try again.");
-      setIsPlaying(false);
-      Alert.alert("Playback error", e instanceof Error ? e.message : "Could not initialize audio.");
+      await Haptics.selectionAsync();
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const stopPlayback = async () => {
+    if (!controllerRef.current) return;
+
+    setIsLoading(true);
+    try {
+      await controllerRef.current.stopManual();
+      await Haptics.selectionAsync();
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const pauseOrResumePlayback = async () => {
+    if (!controllerRef.current) return;
+
+    if (isPaused) {
+      await controllerRef.current.resume();
+    } else {
+      await controllerRef.current.pause();
+    }
+
+    await Haptics.selectionAsync();
   };
 
   const changeVolume = async (nextVolume: number) => {
-    setVolume(nextVolume);
-    await saveSettings({ soundVolume: nextVolume });
-    if (soundRef.current) {
-      await soundRef.current.setVolumeAsync(nextVolume).catch(() => undefined);
+    const clamped = Math.max(0, Math.min(1, nextVolume));
+    setVolume(clamped);
+    await saveSettings({ soundVolume: clamped });
+
+    if (controllerRef.current) {
+      await controllerRef.current.setTargetVolume(Math.min(clamped, safeVolumeCapEnabled ? 0.8 : 1));
     }
   };
 
-  return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}> 
-          <Text style={[styles.heading, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Calming Audio (Offline)</Text>
-          <Text style={[styles.text, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>
-            Bundled offline tracks for wind-down. No microphone recording and no user audio storage.
-          </Text>
-        </View>
+  useEffect(() => {
+    controllerRef.current = new SleepAidAudioController({
+      onRemainingSecondsChange: setRemainingSeconds,
+      onPlaybackStateChange: ({ isPlaying: playing, isPaused: paused }) => {
+        setIsPlaying(playing);
+        setIsPaused(paused);
+      },
+      onError: setError,
+    });
 
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}> 
-          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Choose Sound</Text>
+    getSleepAidState().then((state) => {
+      const mappedId = LEGACY_SOUND_ID_MAP[state.selectedSoundId] ?? state.selectedSoundId;
+      const validSoundId = SOUND_OPTIONS.some((item) => item.id === mappedId)
+        ? mappedId
+        : SOUND_OPTIONS[0].id;
+
+      const nextMinutes =
+        typeof state.soundTimerMinutes === "number" &&
+        state.soundTimerMinutes >= DURATION_MINUTES_MIN &&
+        state.soundTimerMinutes <= DURATION_MINUTES_MAX
+          ? Math.floor(state.soundTimerMinutes)
+          : 30;
+
+      setSelectedSoundId(validSoundId);
+      setDurationMinutes(nextMinutes);
+      setVolume(state.soundVolume);
+      setSafeVolumeCapEnabled(state.safeVolumeCapEnabled);
+    });
+
+    return () => {
+      controllerRef.current?.dispose().catch(() => undefined);
+      controllerRef.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!controllerRef.current) return;
+    controllerRef.current.setTargetVolume(effectiveVolume).catch(() => undefined);
+  }, [effectiveVolume]);
+
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (nextState) => {
+      const wasActive = appStateRef.current === "active";
+      appStateRef.current = nextState;
+
+      if (wasActive && nextState !== "active" && controllerRef.current && isPlaying && !isPaused) {
+        controllerRef.current.pause().catch(() => undefined);
+      }
+    });
+
+    return () => {
+      subscription.remove();
+    };
+  }, [isPaused, isPlaying]);
+
+  return (
+    <SleepAidScaffold>
+      <SleepAidFadeIn>
+        <SleepAidCard>
+          <Text style={styles.heading}>Calming Soundscapes</Text>
+          <Text style={styles.copy}>
+            Select a sound and duration. Playback loops seamlessly for the full timer length.
+          </Text>
+        </SleepAidCard>
+      </SleepAidFadeIn>
+
+      <SleepAidFadeIn delay={60}>
+        <SleepAidCard>
+          <Text style={styles.sectionTitle}>Choose Sound</Text>
           {SOUND_OPTIONS.map((sound) => {
             const selected = sound.id === selectedSound.id;
             return (
@@ -142,89 +311,389 @@ export default function SleepAidAudioScreen() {
                 key={sound.id}
                 onPress={async () => {
                   setSelectedSoundId(sound.id);
-                  await saveSettings({ selectedSoundId: sound.id });
+                  await saveSettings({ selectedSoundId: sound.id, selectedSoundName: sound.name });
+                  await Haptics.selectionAsync();
+
+                  if (isPlaying) {
+                    await restartPlayback(sound.id);
+                  }
                 }}
-                style={[styles.optionBtn, { borderColor: selected ? theme.primary : theme.border, backgroundColor: selected ? theme.primary + "20" : "transparent" }]}
+                style={[styles.optionBtn, selected ? styles.optionBtnActive : null]}
               >
-                <Text style={[styles.optionBtnText, { color: theme.text, fontFamily: "Nunito_600SemiBold" }]}>{sound.name}</Text>
+                <View style={styles.optionTextWrap}>
+                  <Text style={styles.optionTitle}>{sound.name}</Text>
+                  <Text style={styles.optionSubtitle}>{sound.subtitle}</Text>
+                </View>
+                {selected ? <Ionicons name="checkmark-circle" size={19} color={sleepAidTheme.primaryLight} /> : null}
               </Pressable>
             );
           })}
-        </View>
+        </SleepAidCard>
+      </SleepAidFadeIn>
 
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}> 
-          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Sleep Timer</Text>
+      <SleepAidFadeIn delay={100}>
+        <SleepAidCard>
+          <Text style={styles.sectionTitle}>Duration</Text>
           <View style={styles.rowWrap}>
-            {TIMER_OPTIONS.map((minutes) => (
+            {QUICK_TIMER_OPTIONS.map((minutes) => (
               <Pressable
                 key={minutes}
                 onPress={async () => {
-                  setTimerMinutes(minutes);
-                  await saveSettings({ soundTimerMinutes: minutes });
+                  await applyDuration(minutes);
+                  await Haptics.selectionAsync();
                 }}
-                style={[styles.segmentBtn, { backgroundColor: timerMinutes === minutes ? theme.primary : theme.surface }]}
+                style={[styles.segmentBtn, durationMinutes === minutes ? styles.segmentBtnActive : null]}
               >
-                <Text style={[styles.segmentText, { color: timerMinutes === minutes ? "#fff" : theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>{minutes} min</Text>
+                <Text style={[styles.segmentText, durationMinutes === minutes ? styles.segmentTextActive : null]}>{minutes} min</Text>
               </Pressable>
             ))}
+            <Pressable
+              onPress={openCustomDurationPicker}
+              style={[styles.segmentBtn, isCustomDuration ? styles.segmentBtnActive : null]}
+            >
+              <Text style={[styles.segmentText, isCustomDuration ? styles.segmentTextActive : null]}>
+                Custom ({durationMinutes}m)
+              </Text>
+            </Pressable>
           </View>
 
-          <Text style={[styles.sectionTitle, { color: theme.text, fontFamily: "Nunito_700Bold", marginTop: 16 }]}>Volume</Text>
-          <View style={styles.rowWrap}>
-            {VOLUME_OPTIONS.map((vol) => (
-              <Pressable
-                key={vol}
-                onPress={() => {
-                  changeVolume(vol).catch(() => undefined);
-                }}
-                style={[styles.segmentBtn, { backgroundColor: Math.abs(volume - vol) < 0.01 ? theme.primary : theme.surface }]}
-              >
-                <Text style={[styles.segmentText, { color: Math.abs(volume - vol) < 0.01 ? "#fff" : theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>{Math.round(vol * 100)}%</Text>
+          <Text style={[styles.sectionTitle, { marginTop: 12 }]}>Volume</Text>
+          <View style={styles.volumeTrack}>
+            {VOLUME_LEVELS.map((level) => {
+              const active = level <= volume + 0.001;
+              return (
+                <Pressable
+                  key={level}
+                  onPress={() => {
+                    changeVolume(level).catch(() => undefined);
+                    Haptics.selectionAsync().catch(() => undefined);
+                  }}
+                  style={[styles.volumeBar, active ? styles.volumeBarActive : null]}
+                  accessibilityRole="adjustable"
+                  accessibilityLabel={`Volume ${Math.round(level * 100)} percent`}
+                />
+              );
+            })}
+          </View>
+          <Text style={styles.metaText}>
+            Current: {Math.round(volume * 100)}% {safeVolumeCapEnabled ? "(safe cap 80%)" : ""}
+          </Text>
+
+          <Pressable
+            onPress={async () => {
+              const next = !safeVolumeCapEnabled;
+              setSafeVolumeCapEnabled(next);
+              await saveSettings({ safeVolumeCapEnabled: next });
+              await Haptics.selectionAsync();
+            }}
+            style={styles.capToggle}
+          >
+            <Text style={styles.capToggleText}>Safe max volume cap: {safeVolumeCapEnabled ? "On" : "Off"}</Text>
+          </Pressable>
+        </SleepAidCard>
+      </SleepAidFadeIn>
+
+      {error ? (
+        <SleepAidFadeIn delay={120}>
+          <SleepAidCard style={styles.errorCard}>
+            <Text style={styles.errorText}>{error}</Text>
+          </SleepAidCard>
+        </SleepAidFadeIn>
+      ) : null}
+
+      <SleepAidFadeIn delay={140}>
+        <Pressable
+          onPress={() => {
+            if (isLoading) return;
+            if (!isPlaying) {
+              startPlayback().catch(() => undefined);
+            } else {
+              stopPlayback().catch(() => undefined);
+            }
+          }}
+          style={[styles.playBtn, { backgroundColor: isPlaying ? sleepAidTheme.accent : sleepAidTheme.primary }]}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Ionicons name={isPlaying ? "stop" : "play"} size={20} color="#fff" />
+          )}
+          <Text style={styles.playText}>{isPlaying ? "Stop with Fade" : "Start with Fade"}</Text>
+        </Pressable>
+      </SleepAidFadeIn>
+
+      {isPlaying ? (
+        <SleepAidFadeIn delay={180}>
+          <View style={styles.nowPlayingBar}>
+            <View>
+              <Text style={styles.nowPlayingLabel}>Now Playing</Text>
+              <Text style={styles.nowPlayingTitle}>{selectedSound.name}</Text>
+              <Text style={styles.nowPlayingTime}>Remaining {formatSeconds(remainingSeconds)}</Text>
+            </View>
+            <Pressable onPress={() => pauseOrResumePlayback().catch(() => undefined)} style={styles.pauseBtn}>
+              <Ionicons name={isPaused ? "play" : "pause"} size={18} color="#fff" />
+            </Pressable>
+          </View>
+        </SleepAidFadeIn>
+      ) : null}
+
+      <Modal
+        visible={customModalVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setCustomModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Custom Duration</Text>
+            <Text style={styles.modalText}>Enter minutes between 1 and 180.</Text>
+            <TextInput
+              value={customMinutesInput}
+              onChangeText={setCustomMinutesInput}
+              keyboardType="number-pad"
+              placeholder="Minutes"
+              placeholderTextColor={sleepAidTheme.textMuted}
+              style={styles.modalInput}
+              maxLength={3}
+            />
+            <View style={styles.modalActions}>
+              <Pressable onPress={() => setCustomModalVisible(false)} style={styles.modalBtnSecondary}>
+                <Text style={styles.modalBtnSecondaryText}>Cancel</Text>
               </Pressable>
-            ))}
+              <Pressable onPress={() => applyCustomDuration().catch(() => undefined)} style={styles.modalBtnPrimary}>
+                <Text style={styles.modalBtnPrimaryText}>Apply</Text>
+              </Pressable>
+            </View>
           </View>
         </View>
-
-        {error ? (
-          <View style={[styles.errorCard, { backgroundColor: theme.error + "20", borderColor: theme.error }]}> 
-            <Text style={[styles.errorText, { color: theme.error, fontFamily: "Nunito_600SemiBold" }]}>{error}</Text>
-          </View>
-        ) : null}
-
-        <Pressable
-          onPress={() => (isPlaying ? stopPlayback() : startPlayback())}
-          style={[styles.playBtn, { backgroundColor: isPlaying ? theme.accent : theme.primary }]}
-        >
-          <Ionicons name={isPlaying ? "stop" : "play"} size={20} color="#fff" />
-          <Text style={[styles.playText, { fontFamily: "Nunito_700Bold" }]}>{isPlaying ? "Stop Playback" : "Play Loop"}</Text>
-        </Pressable>
-      </ScrollView>
-    </View>
+      </Modal>
+    </SleepAidScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 40, gap: 12 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 18, gap: 9 },
-  heading: { fontSize: 18.5 },
-  text: { fontSize: 14.5, lineHeight: 21 },
-  sectionTitle: { fontSize: 15.5 },
-  optionBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 11, paddingHorizontal: 12, marginTop: 8 },
-  optionBtnText: { fontSize: 14.5 },
-  rowWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
-  segmentBtn: { borderRadius: 10, paddingVertical: 9, paddingHorizontal: 12 },
-  segmentText: { fontSize: 13.5 },
-  errorCard: { borderWidth: 1, borderRadius: 12, padding: 12 },
-  errorText: { fontSize: 13 },
+  heading: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_700Bold",
+    fontSize: 19,
+  },
+  copy: {
+    color: sleepAidTheme.textSecondary,
+    fontFamily: "Nunito_400Regular",
+    fontSize: 14.5,
+    lineHeight: 22,
+  },
+  sectionTitle: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_700Bold",
+    fontSize: 15.5,
+  },
+  optionBtn: {
+    borderWidth: 1,
+    borderColor: sleepAidTheme.border,
+    borderRadius: 13,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginTop: 6,
+  },
+  optionBtnActive: {
+    borderColor: sleepAidTheme.primary,
+    backgroundColor: `${sleepAidTheme.primary}20`,
+  },
+  optionTextWrap: {
+    flex: 1,
+  },
+  optionTitle: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 14.5,
+  },
+  optionSubtitle: {
+    color: sleepAidTheme.textMuted,
+    fontFamily: "Nunito_400Regular",
+    fontSize: 12.5,
+    marginTop: 2,
+  },
+  rowWrap: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 6,
+  },
+  segmentBtn: {
+    borderRadius: 11,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    backgroundColor: sleepAidTheme.surface,
+  },
+  segmentBtnActive: {
+    backgroundColor: sleepAidTheme.primary,
+  },
+  segmentText: {
+    color: sleepAidTheme.textSecondary,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+  },
+  segmentTextActive: {
+    color: "#fff",
+  },
+  volumeTrack: {
+    marginTop: 8,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    gap: 4,
+  },
+  volumeBar: {
+    flex: 1,
+    borderRadius: 6,
+    height: 12,
+    backgroundColor: sleepAidTheme.surface,
+  },
+  volumeBarActive: {
+    backgroundColor: sleepAidTheme.primary,
+  },
+  metaText: {
+    color: sleepAidTheme.textMuted,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12.5,
+    marginTop: 6,
+  },
+  capToggle: {
+    borderWidth: 1,
+    borderColor: sleepAidTheme.border,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    marginTop: 8,
+  },
+  capToggleText: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 14,
+  },
+  errorCard: {
+    borderColor: sleepAidTheme.error,
+    backgroundColor: `${sleepAidTheme.error}25`,
+  },
+  errorText: {
+    color: sleepAidTheme.error,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+  },
   playBtn: {
-    marginTop: 4,
-    height: 50,
-    borderRadius: 24,
+    height: 52,
+    borderRadius: 26,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 8,
   },
-  playText: { color: "#fff", fontSize: 15 },
+  playText: {
+    color: "#fff",
+    fontFamily: "Nunito_700Bold",
+    fontSize: 15,
+  },
+  nowPlayingBar: {
+    borderWidth: 1,
+    borderColor: sleepAidTheme.border,
+    backgroundColor: sleepAidTheme.surfaceElevated,
+    borderRadius: 16,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  nowPlayingLabel: {
+    color: sleepAidTheme.textMuted,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12,
+  },
+  nowPlayingTitle: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_700Bold",
+    fontSize: 14.5,
+    marginTop: 1,
+  },
+  nowPlayingTime: {
+    color: sleepAidTheme.primaryLight,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 12.5,
+    marginTop: 1,
+  },
+  pauseBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: sleepAidTheme.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0, 0, 0, 0.6)",
+    justifyContent: "center",
+    paddingHorizontal: 22,
+  },
+  modalCard: {
+    backgroundColor: sleepAidTheme.card,
+    borderColor: sleepAidTheme.border,
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10,
+  },
+  modalTitle: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_700Bold",
+    fontSize: 17,
+  },
+  modalText: {
+    color: sleepAidTheme.textSecondary,
+    fontFamily: "Nunito_400Regular",
+    fontSize: 14,
+  },
+  modalInput: {
+    borderWidth: 1,
+    borderColor: sleepAidTheme.border,
+    borderRadius: 10,
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: sleepAidTheme.surface,
+  },
+  modalActions: {
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  modalBtnSecondary: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: sleepAidTheme.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  modalBtnSecondaryText: {
+    color: sleepAidTheme.text,
+    fontFamily: "Nunito_600SemiBold",
+    fontSize: 13,
+  },
+  modalBtnPrimary: {
+    borderRadius: 10,
+    backgroundColor: sleepAidTheme.primary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  modalBtnPrimaryText: {
+    color: "#fff",
+    fontFamily: "Nunito_700Bold",
+    fontSize: 13,
+  },
 });
