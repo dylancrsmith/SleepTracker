@@ -176,7 +176,7 @@ export default function SleepScreen() {
         <View style={styles.header}>
           <View>
             <Text style={[styles.greeting, { color: theme.textSecondary, fontFamily: "Nunito_600SemiBold" }]}>
-              {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening"}{user?.username ? `, ${user.username}` : ""}
+              {new Date().getHours() < 12 ? "Good morning" : new Date().getHours() < 18 ? "Good afternoon" : "Good evening"}{user?.fullName ? `, ${user.fullName}` : ""}
             </Text>
             <Text style={[styles.title, { color: theme.text, fontFamily: "Nunito_800ExtraBold" }]}>
               DreamStreak
