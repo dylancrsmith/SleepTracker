@@ -1,12 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, StyleSheet, Pressable, ScrollView, Platform, useColorScheme, Alert } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { View, StyleSheet, Pressable, Alert } from "react-native";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import Colors from "@/constants/colors";
 import { useSleep } from "@/lib/sleep-context";
 import { getSleepAidState, patchSleepAidState } from "@/lib/sleep-aid-storage";
 import { scheduleSleepAidReminder, cancelSleepAidReminder } from "@/lib/sleep-aid-reminders";
+import { SleepAidCard } from "@/components/sleep-aid/SleepAidCard";
+import { SleepAidScaffold } from "@/components/sleep-aid/SleepAidScaffold";
+import { SleepAidBody, SleepAidHeading, SleepAidSubheading } from "@/components/sleep-aid/SleepAidText";
 
 function formatTime(hour: number, minute: number): string {
   const ampm = hour >= 12 ? "PM" : "AM";
@@ -14,15 +17,42 @@ function formatTime(hour: number, minute: number): string {
   return `${h12}:${minute.toString().padStart(2, "0")} ${ampm}`;
 }
 
+const MENU_ITEMS = [
+  {
+    title: "Guided Wind-down Routine",
+    description: "Checklist with progress and small daily XP reward.",
+    route: "/sleep-aid/wind-down" as const,
+    icon: "checkmark-done-circle-outline" as const,
+  },
+  {
+    title: "Calming Audio Sounds",
+    description: "Soft offline soundscapes with fades and sleep timer.",
+    route: "/sleep-aid/audio" as const,
+    icon: "musical-notes-outline" as const,
+  },
+  {
+    title: "Guided Breathing",
+    description: "Animated breathing rhythm to settle your nervous system.",
+    route: "/sleep-aid/breathing" as const,
+    icon: "ellipse-outline" as const,
+  },
+  {
+    title: "Light Stretching & Relax",
+    description: "Gentle sequence to release tension before bed.",
+    route: "/sleep-aid/stretching" as const,
+    icon: "body-outline" as const,
+  },
+  {
+    title: "Relaxation / Body Scan",
+    description: "Guided session mode with auto-advance or manual pacing.",
+    route: "/sleep-aid/relaxation" as const,
+    icon: "leaf-outline" as const,
+  },
+];
+
 export default function SleepAidHubScreen() {
-  const insets = useSafeAreaInsets();
-  const colorScheme = useColorScheme();
-  const isDark = colorScheme === "dark";
-  const theme = isDark ? Colors.dark : Colors.light;
   const { settings } = useSleep();
   const [reminderEnabled, setReminderEnabled] = useState(false);
-
-  const webTopInset = Platform.OS === "web" ? 67 : 0;
 
   useEffect(() => {
     getSleepAidState().then((state) => setReminderEnabled(state.reminderEnabled));
@@ -44,6 +74,8 @@ export default function SleepAidHubScreen() {
         await patchSleepAidState({ reminderEnabled: true });
         setReminderEnabled(true);
       }
+
+      Haptics.selectionAsync().catch(() => undefined);
     } catch (error) {
       Alert.alert(
         "Reminder unavailable",
@@ -55,103 +87,77 @@ export default function SleepAidHubScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView
-        contentContainerStyle={{
-          paddingTop: insets.top + webTopInset + 16,
-          paddingHorizontal: 20,
-          paddingBottom: 100,
-          gap: 14,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text style={[styles.title, { color: theme.text, fontFamily: "Nunito_800ExtraBold" }]}>Sleep Aid</Text>
-        <Text style={[styles.subtitle, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>
-          Gentle, non-medical tools to make your pre-sleep routine easier to repeat each night.
-        </Text>
+    <SleepAidScaffold>
+      <SleepAidCard>
+        <SleepAidHeading>Sleep Aid</SleepAidHeading>
+        <SleepAidBody>
+          Gentle, non-medical tools to help your evenings feel quieter, smoother, and repeatable.
+        </SleepAidBody>
+      </SleepAidCard>
 
-        {settings ? (
-          <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-            <Text style={[styles.cardTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Smart Bedtime Reminder</Text>
-            <Text style={[styles.cardText, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>
-              You usually sleep at {formatTime(settings.bedtimeHour, settings.bedtimeMinute)}. Would you like a daily wind-down nudge?
-            </Text>
-            <Pressable
-              onPress={handleReminderToggle}
-              style={[styles.primaryBtn, { backgroundColor: reminderEnabled ? theme.accent : theme.primary }]}
-              accessibilityRole="button"
-              accessibilityLabel="Toggle bedtime reminder"
-            >
-              <Text style={[styles.primaryBtnText, { fontFamily: "Nunito_700Bold" }]}>
-                {reminderEnabled ? "Disable Reminder" : "Enable Daily Reminder"}
-              </Text>
-            </Pressable>
+      {settings ? (
+        <SleepAidCard>
+          <SleepAidSubheading>Smart Bedtime Reminder</SleepAidSubheading>
+          <SleepAidBody>
+            Your bedtime is {formatTime(settings.bedtimeHour, settings.bedtimeMinute)}. Keep a gentle wind-down nudge on?
+          </SleepAidBody>
+          <Pressable
+            onPress={handleReminderToggle}
+            style={[styles.primaryBtn, { backgroundColor: reminderEnabled ? Colors.dark.accent : Colors.dark.primary }]}
+            accessibilityRole="button"
+            accessibilityLabel="Toggle bedtime reminder"
+          >
+            <SleepAidSubheading style={styles.primaryBtnText}>
+              {reminderEnabled ? "Disable Reminder" : "Enable Daily Reminder"}
+            </SleepAidSubheading>
+          </Pressable>
+        </SleepAidCard>
+      ) : null}
+
+      {MENU_ITEMS.map((item) => (
+        <Pressable
+          key={item.route}
+          onPress={() => router.push(item.route)}
+          style={styles.menuItem}
+        >
+          <View style={styles.iconWrap}>
+            <Ionicons name={item.icon} size={22} color={Colors.dark.primaryLight} />
           </View>
-        ) : null}
-
-        <Pressable onPress={() => router.push("/sleep-aid/wind-down")} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Ionicons name="checkmark-done-circle-outline" size={22} color={theme.primary} />
           <View style={styles.menuTextCol}>
-            <Text style={[styles.menuTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Guided Wind-down Routine</Text>
-            <Text style={[styles.menuDesc, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Checklist with progress and a small daily XP reward.</Text>
+            <SleepAidSubheading style={styles.menuTitle}>{item.title}</SleepAidSubheading>
+            <SleepAidBody style={styles.menuDesc}>{item.description}</SleepAidBody>
           </View>
         </Pressable>
-
-        <Pressable onPress={() => router.push("/sleep-aid/audio")} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Ionicons name="musical-notes-outline" size={22} color={theme.primary} />
-          <View style={styles.menuTextCol}>
-            <Text style={[styles.menuTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Calming Audio Sounds</Text>
-            <Text style={[styles.menuDesc, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Offline soundscapes with loop, timer, and volume control.</Text>
-          </View>
-        </Pressable>
-
-        <Pressable onPress={() => router.push("/sleep-aid/breathing")} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Ionicons name="ellipse-outline" size={22} color={theme.primary} />
-          <View style={styles.menuTextCol}>
-            <Text style={[styles.menuTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Guided Breathing</Text>
-            <Text style={[styles.menuDesc, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Animated breathing cycle: 4s inhale, 4s hold, 6s exhale.</Text>
-          </View>
-        </Pressable>
-
-        <Pressable onPress={() => router.push("/sleep-aid/stretching")} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Ionicons name="body-outline" size={22} color={theme.primary} />
-          <View style={styles.menuTextCol}>
-            <Text style={[styles.menuTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Light Stretching & Relax</Text>
-            <Text style={[styles.menuDesc, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Gentle step-by-step stretches before bed.</Text>
-          </View>
-        </Pressable>
-
-        <Pressable onPress={() => router.push("/sleep-aid/relaxation")} style={[styles.menuItem, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
-          <Ionicons name="leaf-outline" size={22} color={theme.primary} />
-          <View style={styles.menuTextCol}>
-            <Text style={[styles.menuTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Relaxation / Meditation</Text>
-            <Text style={[styles.menuDesc, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Simple 5-minute body scan guide with timer.</Text>
-          </View>
-        </Pressable>
-      </ScrollView>
-    </View>
+      ))}
+    </SleepAidScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  title: { fontSize: 28 },
-  subtitle: { fontSize: 15, lineHeight: 22, marginBottom: 4 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 18, gap: 12 },
-  cardTitle: { fontSize: 16 },
-  cardText: { fontSize: 14, lineHeight: 20 },
-  primaryBtn: { height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
-  primaryBtnText: { color: "#fff", fontSize: 14 },
+  primaryBtn: { height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center", marginTop: 4 },
+  primaryBtnText: { color: "#fff", fontSize: 14.5 },
   menuItem: {
     borderWidth: 1,
+    borderColor: Colors.dark.cardBorder,
     borderRadius: 16,
-    paddingVertical: 15,
+    backgroundColor: "rgba(26, 34, 64, 0.86)",
+    paddingVertical: 14,
     paddingHorizontal: 14,
     flexDirection: "row",
     gap: 12,
     alignItems: "center",
   },
-  menuTextCol: { flex: 1, gap: 4 },
+  iconWrap: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(123, 140, 222, 0.14)",
+    borderWidth: 1,
+    borderColor: "rgba(123, 140, 222, 0.36)",
+  },
+  menuTextCol: { flex: 1, gap: 3 },
   menuTitle: { fontSize: 15.5 },
-  menuDesc: { fontSize: 13.5, lineHeight: 18 },
+  menuDesc: { fontSize: 13.5, lineHeight: 19 },
 });

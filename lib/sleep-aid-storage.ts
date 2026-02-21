@@ -11,10 +11,13 @@ export type SleepAidState = {
   windDownCheckedIds: string[];
   windDownRewardDate: string;
   selectedSoundId: string;
-  soundTimerMinutes: 15 | 30 | 60;
+  soundTimerMinutes: 15 | 30 | 45 | 60;
   soundVolume: number;
+  soundSafeMaxEnabled: boolean;
   breathingMinutes: 2 | 5 | 10;
   relaxTimerEnabled: boolean;
+  relaxationAutoAdvance: boolean;
+  relaxationStepDelaySeconds: 20 | 30 | 45;
   reminderEnabled: boolean;
 };
 
@@ -29,11 +32,14 @@ export const DEFAULT_WIND_DOWN_STEPS: WindDownStep[] = [
 export const DEFAULT_SLEEP_AID_STATE: SleepAidState = {
   windDownCheckedIds: [],
   windDownRewardDate: "",
-  selectedSoundId: "white_noise",
+  selectedSoundId: "pink_noise",
   soundTimerMinutes: 30,
   soundVolume: 0.7,
+  soundSafeMaxEnabled: true,
   breathingMinutes: 5,
   relaxTimerEnabled: true,
+  relaxationAutoAdvance: true,
+  relaxationStepDelaySeconds: 30,
   reminderEnabled: false,
 };
 
@@ -49,6 +55,7 @@ export async function getSleepAidState(): Promise<SleepAidState> {
       soundTimerMinutes:
         parsed.soundTimerMinutes === 15 ||
         parsed.soundTimerMinutes === 30 ||
+        parsed.soundTimerMinutes === 45 ||
         parsed.soundTimerMinutes === 60
           ? parsed.soundTimerMinutes
           : DEFAULT_SLEEP_AID_STATE.soundTimerMinutes,
@@ -62,6 +69,20 @@ export async function getSleepAidState(): Promise<SleepAidState> {
         typeof parsed.soundVolume === "number"
           ? Math.max(0, Math.min(1, parsed.soundVolume))
           : DEFAULT_SLEEP_AID_STATE.soundVolume,
+      soundSafeMaxEnabled:
+        typeof parsed.soundSafeMaxEnabled === "boolean"
+          ? parsed.soundSafeMaxEnabled
+          : DEFAULT_SLEEP_AID_STATE.soundSafeMaxEnabled,
+      relaxationAutoAdvance:
+        typeof parsed.relaxationAutoAdvance === "boolean"
+          ? parsed.relaxationAutoAdvance
+          : DEFAULT_SLEEP_AID_STATE.relaxationAutoAdvance,
+      relaxationStepDelaySeconds:
+        parsed.relaxationStepDelaySeconds === 20 ||
+        parsed.relaxationStepDelaySeconds === 30 ||
+        parsed.relaxationStepDelaySeconds === 45
+          ? parsed.relaxationStepDelaySeconds
+          : DEFAULT_SLEEP_AID_STATE.relaxationStepDelaySeconds,
       windDownCheckedIds: Array.isArray(parsed.windDownCheckedIds)
         ? parsed.windDownCheckedIds
         : [],

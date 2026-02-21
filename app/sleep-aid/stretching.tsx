@@ -1,62 +1,79 @@
 import React from "react";
-import { ScrollView, StyleSheet, Text, View, useColorScheme } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Colors from "@/constants/colors";
+import { SleepAidCard } from "@/components/sleep-aid/SleepAidCard";
+import { SleepAidScaffold } from "@/components/sleep-aid/SleepAidScaffold";
+import { SleepAidBody, SleepAidHeading, SleepAidSubheading } from "@/components/sleep-aid/SleepAidText";
 
 const STRETCH_STEPS = [
   {
     name: "Neck rolls",
     instruction:
-      "Sit tall. Slowly circle your neck clockwise for 20 seconds, then counter-clockwise for 20 seconds. Keep shoulders relaxed.",
+      "Sit tall. Circle your neck clockwise for 20 seconds, then counter-clockwise for 20 seconds. Keep shoulders loose.",
   },
   {
-    name: "Shoulder relaxation",
+    name: "Shoulder release",
     instruction:
-      "Lift your shoulders toward your ears, hold 2 seconds, then release. Repeat 8 gentle reps with slow breathing.",
+      "Lift shoulders toward your ears, hold for 2 seconds, then fully release. Repeat 8 gentle reps with slow breathing.",
   },
   {
     name: "Light back stretch",
     instruction:
-      "Sit and hinge forward with a straight back until you feel a mild stretch. Hold for 20-30 seconds and breathe slowly.",
+      "Sit and hinge forward with a straight back until you feel a mild stretch. Hold for 20 to 30 seconds.",
   },
   {
     name: "Hamstring stretch",
     instruction:
-      "Extend one leg, keep the other bent, and lean toward the extended leg. Hold 20-30 seconds each side without bouncing.",
+      "Extend one leg, keep the other bent, and lean toward the extended leg. Hold 20 to 30 seconds per side.",
   },
 ];
 
 export default function StretchingScreen() {
-  const colorScheme = useColorScheme();
-  const theme = colorScheme === "dark" ? Colors.dark : Colors.light;
-
   return (
-    <View style={[styles.container, { backgroundColor: theme.background }]}>
-      <ScrollView contentContainerStyle={styles.content}>
-        <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}> 
-          <Text style={[styles.title, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>Light Stretching & Relax</Text>
-          <Text style={[styles.copy, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>
-            Move slowly and stay in a comfortable range. This is a gentle wind-down sequence, not a workout.
-          </Text>
-        </View>
+    <SleepAidScaffold>
+      <SleepAidCard>
+        <SleepAidHeading>Light Stretching</SleepAidHeading>
+        <SleepAidBody>
+          Move slowly and stay within a comfortable range. This sequence should feel soothing, never forceful.
+        </SleepAidBody>
+      </SleepAidCard>
 
-        {STRETCH_STEPS.map((step, index) => (
-          <View key={step.name} style={[styles.stepCard, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}> 
-            <Text style={[styles.stepTitle, { color: theme.text, fontFamily: "Nunito_700Bold" }]}>{index + 1}. {step.name}</Text>
-            <Text style={[styles.stepText, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>{step.instruction}</Text>
+      {STRETCH_STEPS.map((step, index) => (
+        <SleepAidCard key={step.name} style={styles.stepCard}>
+          <View style={styles.stepHeader}>
+            <View style={styles.badge}>
+              <SleepAidSubheading style={styles.badgeText}>{index + 1}</SleepAidSubheading>
+            </View>
+            <SleepAidSubheading>{step.name}</SleepAidSubheading>
           </View>
-        ))}
-      </ScrollView>
-    </View>
+          <SleepAidBody>{step.instruction}</SleepAidBody>
+        </SleepAidCard>
+      ))}
+    </SleepAidScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1 },
-  content: { padding: 20, paddingBottom: 40, gap: 12 },
-  card: { borderWidth: 1, borderRadius: 16, padding: 18, gap: 8 },
-  title: { fontSize: 18.5 },
-  copy: { fontSize: 14.5, lineHeight: 21 },
-  stepCard: { borderWidth: 1, borderRadius: 14, padding: 15, gap: 8 },
-  stepTitle: { fontSize: 15.5 },
-  stepText: { fontSize: 14.5, lineHeight: 21 },
+  stepCard: {
+    gap: 9,
+  },
+  stepHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+  },
+  badge: {
+    width: 30,
+    height: 30,
+    borderRadius: 16,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(123, 140, 222, 0.2)",
+    borderWidth: 1,
+    borderColor: Colors.dark.primary,
+  },
+  badgeText: {
+    color: Colors.dark.primaryLight,
+    fontSize: 14,
+  },
 });
