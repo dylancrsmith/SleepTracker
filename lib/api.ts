@@ -3,7 +3,7 @@
  * All requests go through here so we have one place to manage the base URL and auth token.
  */
 
-const BASE_URL = "https://sleeptracker-rq4y.onrender.com";
+const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:5000";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
@@ -19,7 +19,7 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   };
 
   if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+    headers.Authorization = `Bearer ${token}`;
   }
 
   const response = await fetch(`${BASE_URL}${endpoint}`, {
@@ -31,14 +31,11 @@ async function request<T>(endpoint: string, options: RequestOptions = {}): Promi
   const data = await response.json();
 
   if (!response.ok) {
-    // Throw the server's error message so we can show it in the UI
     throw new Error(data.message || "Something went wrong");
   }
 
   return data as T;
 }
-
-// ─── Auth ─────────────────────────────────────────────────────────────────────
 
 export type AuthUser = {
   id: string;
@@ -78,15 +75,11 @@ export const authApi = {
       body: { username, password },
     }),
 
-  me: (token: string) =>
-    request<{ user: AuthUser }>("/api/auth/me", { token }),
+  me: (token: string) => request<{ user: AuthUser }>("/api/auth/me", { token }),
 };
 
-// ─── Sleep Logs ───────────────────────────────────────────────────────────────
-
 export const sleepApi = {
-  getLogs: (token: string) =>
-    request<{ logs: any[] }>("/api/sleep", { token }),
+  getLogs: (token: string) => request<{ logs: any[] }>("/api/sleep", { token }),
 
   saveLog: (log: object, token: string) =>
     request<{ log: any }>("/api/sleep", {
@@ -98,6 +91,32 @@ export const sleepApi = {
   deleteLog: (id: string, token: string) =>
     request<{ message: string }>(`/api/sleep/${id}`, {
       method: "DELETE",
+      token,
+    }),
+};
+
+export type WearableSleepSessionPayload = {
+  start: string;
+  end: string;
+  source?: string;
+  type?: string;
+};
+
+export type WearableSleepSummary = {
+  id: string;
+  date: string;
+  startTime: number;
+  endTime: number;
+  durationMinutes: number;
+  source: string;
+  type: string;
+};
+
+export const wearablesApi = {
+  uploadSleepSession: (session: WearableSleepSessionPayload, token: string) =>
+    request<{ summary: WearableSleepSummary }>("/api/wearables/sleep", {
+      method: "POST",
+      body: session,
       token,
     }),
 };

@@ -10,7 +10,8 @@ import Animated, { useAnimatedStyle, useSharedValue, withRepeat, withTiming, wit
 import Colors from "@/constants/colors";
 import { useSleep } from "@/lib/sleep-context";
 import { useAuth } from "@/lib/auth-context";
-import { getCompanionStage, getXPProgress, getXPForNextLevel, LEVEL_THRESHOLDS } from "@/lib/gamification";
+import { getCompanionStage, getXPProgress, getXPForNextLevel } from "@/lib/gamification";
+import { getCurrentStreak, getDerivedLevel, getDerivedXp } from "@/lib/sleep-metrics";
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
@@ -77,7 +78,7 @@ export default function SleepScreen() {
   const colorScheme = useColorScheme();
   const isDark = colorScheme === "dark";
   const theme = isDark ? Colors.dark : Colors.light;
-  const { settings, activeSession, gamification, sleepLogs, startSleep, onboardingDone, isLoading } = useSleep();
+  const { settings, activeSession, sleepLogs, startSleep, onboardingDone, isLoading } = useSleep();
   const { user } = useAuth();
 
   const [ritualDone, setRitualDone] = useState(0);
@@ -151,13 +152,17 @@ export default function SleepScreen() {
     });
   };
 
-  const companion = getCompanionStage(gamification.level);
-  const xpProgress = getXPProgress(gamification.xp, gamification.level);
-  const xpForNext = getXPForNextLevel(gamification.level);
-  const currentThreshold = LEVEL_THRESHOLDS[gamification.level - 1] || 0;
+  const displayedXp = getDerivedXp(sleepLogs);
+  const displayedLevel = getDerivedLevel(sleepLogs);
+  const displayedStreak = getCurrentStreak(sleepLogs);
+  const companion = getCompanionStage(displayedLevel);
+  const xpProgress = getXPProgress(displayedXp, displayedLevel);
+  const xpForNext = getXPForNextLevel(displayedLevel);
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  const todayLog = sleepLogs.find((l) => l.date === todayStr);
+  const latestLog = sleepLogs.reduce<((typeof sleepLogs)[number] | null)>((latest, log) => {
+    if (!latest) return log;
+    return log.endTime > latest.endTime ? log : latest;
+  }, null);
 
   if (isLoading) {
     return (
@@ -185,7 +190,7 @@ export default function SleepScreen() {
           <View style={[styles.streakBadge, { backgroundColor: theme.accent + "15" }]}>
             <Ionicons name="flame" size={18} color={theme.accent} />
             <Text style={[styles.streakText, { color: theme.accent, fontFamily: "Nunito_800ExtraBold" }]}>
-              {gamification.currentStreak}
+              {displayedStreak}
             </Text>
           </View>
         </View>
@@ -194,7 +199,7 @@ export default function SleepScreen() {
           <View style={styles.companionRow}>
             <View style={[styles.companionAvatar, { backgroundColor: theme.primary + "15" }]}>
               <Ionicons
-                name={gamification.level >= 7 ? "planet" : gamification.level >= 4 ? "sparkles" : "leaf"}
+                name={displayedLevel >= 7 ? "planet" : displayedLevel >= 4 ? "sparkles" : "leaf"}
                 size={32}
                 color={theme.moonLavender}
               />
@@ -204,12 +209,12 @@ export default function SleepScreen() {
                 {companion.name}
               </Text>
               <Text style={[styles.companionMood, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>
-                Level {gamification.level} - {companion.mood}
+                Level {displayedLevel} - {companion.mood}
               </Text>
             </View>
             <View style={styles.xpCol}>
               <Text style={[styles.xpLabel, { color: theme.xpGold, fontFamily: "Nunito_800ExtraBold" }]}>
-                {gamification.xp} XP
+                {displayedXp} XP
               </Text>
             </View>
           </View>
@@ -218,7 +223,7 @@ export default function SleepScreen() {
               <View style={[styles.xpBarFill, { backgroundColor: theme.xpGold, width: `${Math.min(xpProgress * 100, 100)}%` }]} />
             </View>
             <Text style={[styles.xpNextLabel, { color: theme.textMuted, fontFamily: "Nunito_400Regular" }]}>
-              {xpForNext - gamification.xp > 0 ? `${xpForNext - gamification.xp} XP to Level ${gamification.level + 1}` : "Max level!"}
+              {xpForNext - displayedXp > 0 ? `${xpForNext - displayedXp} XP to Level ${displayedLevel + 1}` : "Max level!"}
             </Text>
           </View>
         </View>
@@ -241,7 +246,7 @@ export default function SleepScreen() {
           </View>
         ) : (
           <View style={styles.sleepArea}>
-            {todayLog ? (
+            {latestLog ? (
               <View style={[styles.todaySummary, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
                 <View style={styles.todaySummaryHeader}>
                   <Ionicons name="checkmark-circle" size={24} color={theme.success} />
@@ -252,14 +257,14 @@ export default function SleepScreen() {
                 <View style={styles.todayStats}>
                   <View style={styles.todayStat}>
                     <Text style={[styles.todayStatValue, { color: theme.text, fontFamily: "Nunito_800ExtraBold" }]}>
-                      {formatDuration(todayLog.durationMinutes)}
+                      {formatDuration(latestLog.durationMinutes)}
                     </Text>
                     <Text style={[styles.todayStatLabel, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Duration</Text>
                   </View>
                   <View style={[styles.todayStatDivider, { backgroundColor: theme.border }]} />
                   <View style={styles.todayStat}>
                     <Text style={[styles.todayStatValue, { color: theme.text, fontFamily: "Nunito_800ExtraBold" }]}>
-                      {todayLog.consistencyScore}%
+                      {latestLog.consistencyScore}%
                     </Text>
                     <Text style={[styles.todayStatLabel, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Score</Text>
                   </View>
@@ -267,7 +272,7 @@ export default function SleepScreen() {
                   <View style={styles.todayStat}>
                     <View style={{ flexDirection: "row", gap: 2 }}>
                       {[1, 2, 3, 4, 5].map((s) => (
-                        <Ionicons key={s} name="star" size={14} color={s <= todayLog.rating ? theme.starYellow : theme.border} />
+                        <Ionicons key={s} name="star" size={14} color={s <= latestLog.rating ? theme.starYellow : theme.border} />
                       ))}
                     </View>
                     <Text style={[styles.todayStatLabel, { color: theme.textSecondary, fontFamily: "Nunito_400Regular" }]}>Rating</Text>
@@ -367,3 +372,4 @@ const styles = StyleSheet.create({
   scheduleLabel: { fontSize: 12 },
   scheduleDivider: { width: 1, height: 32 },
 });
+

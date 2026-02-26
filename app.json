@@ -15,10 +15,16 @@
     },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.dreamstreak"
+      "bundleIdentifier": "com.dreamstreak",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "package": "com.dreamstreak",
+      "permissions": [
+        "android.permission.health.READ_SLEEP"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#0B1026",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -36,6 +42,22 @@
           "origin": "https://replit.com/"
         }
       ],
+      [
+        "react-native-health",
+        {
+          "healthSharePermission": "Allow DreamStreak to read your sleep data from Apple Health.",
+          "healthUpdatePermission": "Allow DreamStreak to write sleep data to Apple Health if you enable that later."
+        }
+      ],
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
+      ],
       "expo-font",
       "expo-notifications",
       "expo-web-browser"
@@ -43,6 +65,14 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {
+        "origin": "https://replit.com/"
+      },
+      "eas": {
+        "projectId": "6eb76d38-62de-4e3a-a1e6-8eb6e708806a"
+      }
     }
   }
 }

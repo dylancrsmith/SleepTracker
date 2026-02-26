@@ -8,7 +8,7 @@ import * as Haptics from "expo-haptics";
 import Colors from "@/constants/colors";
 import { useSleep } from "@/lib/sleep-context";
 import { useAuth } from "@/lib/auth-context";
-import { router } from "expo-router";
+import { router, type Href } from "expo-router";
 
 function pad(n: number) {
   return n.toString().padStart(2, "0");
@@ -76,6 +76,7 @@ export default function SettingsScreen() {
   const [showPrivacy, setShowPrivacy] = useState(false);
 
   const webTopInset = Platform.OS === "web" ? 67 : 0;
+  const healthKitRoute = "/healthkit-sync" as Href;
 
   useEffect(() => {
     if (settings) {
@@ -270,6 +271,12 @@ export default function SettingsScreen() {
           Data
         </Text>
         <View style={[styles.card, { backgroundColor: theme.card, borderColor: theme.cardBorder }]}>
+          <Pressable onPress={() => router.push(healthKitRoute)} style={styles.menuRow}>
+            <Ionicons name="heart-outline" size={20} color={theme.primary} />
+            <Text style={[styles.menuLabel, { color: theme.text, fontFamily: "Nunito_600SemiBold" }]}>HealthKit Sync</Text>
+            <Ionicons name="chevron-forward" size={18} color={theme.textMuted} />
+          </Pressable>
+          <View style={[styles.divider, { backgroundColor: theme.border }]} />
           <Pressable onPress={() => setShowPrivacy(true)} style={styles.menuRow}>
             <Ionicons name="shield-checkmark-outline" size={20} color={theme.primary} />
             <Text style={[styles.menuLabel, { color: theme.text, fontFamily: "Nunito_600SemiBold" }]}>Privacy & Data</Text>
