@@ -3,6 +3,8 @@ import * as Storage from "./storage";
 import * as Gamification from "./gamification";
 import { sleepApi } from "./api";
 import { useAuth } from "./auth-context";
+import { queryClient } from "./query-client";
+import { SLEEP_LOGS_QUERY_KEY } from "./use-sleep-logs";
 
 interface SleepContextValue {
   settings: Storage.UserSettings | null;
@@ -114,12 +116,14 @@ export function SleepProvider({ children }: { children: ReactNode }) {
 
     await Storage.saveSleepLog(log);
     await Storage.saveActiveSession(null);
+    await queryClient.invalidateQueries({ queryKey: [SLEEP_LOGS_QUERY_KEY] });
 
     // Also save to the server database (best effort — won't crash the app if offline)
     if (token) {
-      sleepApi.saveLog(log, token).catch((e) =>
-        console.warn("Failed to sync sleep log to server:", e)
-      );
+      sleepApi
+        .saveLog(log, token)
+        .then(() => queryClient.invalidateQueries({ queryKey: [SLEEP_LOGS_QUERY_KEY] }))
+        .catch((e) => console.warn("Failed to sync sleep log to server:", e));
     }
 
     let xpEarned = Gamification.XP_VALUES.LOG_SLEEP;
@@ -144,7 +148,7 @@ export function SleepProvider({ children }: { children: ReactNode }) {
     setGamification(updatedGam);
 
     return newBadges;
-  }, [activeSession, settings, gamification, sleepLogs]);
+  }, [activeSession, settings, gamification, sleepLogs, token]);
 
   const updateMotionCount = useCallback(async (count: number) => {
     if (!activeSession) return;
@@ -182,7 +186,22 @@ export function SleepProvider({ children }: { children: ReactNode }) {
   }, [gamification]);
 
   const deleteAllData = useCallback(async () => {
+    if (token) {
+      try {
+        const { logs } = await sleepApi.getLogs(token);
+        for (const log of logs || []) {
+          const id = String(log?.id ?? "");
+          if (!id) continue;
+          await sleepApi.deleteLog(id, token);
+        }
+      } catch (e) {
+        console.warn("Failed to clear server sleep logs:", e);
+      }
+    }
+
     await Storage.deleteAllData();
+    queryClient.setQueryData([SLEEP_LOGS_QUERY_KEY, token], []);
+    await queryClient.invalidateQueries({ queryKey: [SLEEP_LOGS_QUERY_KEY] });
     setSettings(null);
     setSleepLogs([]);
     setActiveSession(null);
@@ -190,7 +209,7 @@ export function SleepProvider({ children }: { children: ReactNode }) {
     setChecklistItems([]);
     setMotionEnabled(false);
     setOnboardingDone(false);
-  }, []);
+  }, [token]);
 
   const value = useMemo(() => ({
     settings, sleepLogs, activeSession, gamification, checklistItems,

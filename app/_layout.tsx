@@ -35,6 +35,12 @@ function RootLayoutNav() {
         <Stack.Screen name="sleep-aid" options={{ headerShown: false }} />
         <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="check-in" options={{ headerShown: false, presentation: "modal" }} />
+        <Stack.Screen
+          name="healthkit-sync"
+          options={{
+            headerShown: false,
+          }}
+        />
       </Stack>
   );
 }
