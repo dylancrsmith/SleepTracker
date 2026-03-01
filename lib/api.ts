@@ -3,7 +3,7 @@
  * All requests go through here so we have one place to manage the base URL and auth token.
  */
 
-const BASE_URL = process.env.EXPO_PUBLIC_API_BASE_URL || "http://localhost:5000";
+const BASE_URL = "https://sleeptracker-rq4y.onrender.com";
 
 type RequestOptions = {
   method?: "GET" | "POST" | "PUT" | "DELETE";
